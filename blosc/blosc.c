@@ -452,6 +452,142 @@ static int32_t compute_blocksize(int32_t compressor_code, int32_t clevel, int32_
 }
 
 
+char* blosc_list_compressors(void)
+{
+  static int compressors_list_done = 0;
+  static char ret[256];
+
+  if (compressors_list_done) return ret;
+  ret[0] = '\0';
+  strcat(ret, BLOSC_BLOSCLZ_COMPNAME);
+#if defined(HAVE_LZ4)
+  strcat(ret, ","); strcat(ret, BLOSC_LZ4_COMPNAME);
+  strcat(ret, ","); strcat(ret, BLOSC_LZ4HC_COMPNAME);
+#endif /*  HAVE_LZ4 */
+#if defined(HAVE_SNAPPY)
+  strcat(ret, ","); strcat(ret, BLOSC_SNAPPY_COMPNAME);
+#endif /*  HAVE_SNAPPY */
+#if defined(HAVE_ZLIB)
+  strcat(ret, ","); strcat(ret, BLOSC_ZLIB_COMPNAME);
+#endif /*  HAVE_ZLIB */
+  compressors_list_done = 1;
+  return ret;
+}
+
+
+int blosc_get_complib_info(char *compname, char **complib, char **version)
+{
+  int clibcode;
+  char *clibname;
+  char *clibversion = "unknown";
+
+  #if (defined(HAVE_LZ4) && defined(LZ4_VERSION_MAJOR)) || (defined(HAVE_SNAPPY) && defined(SNAPPY_VERSION))
+  char sbuffer[256];
+  #endif
+
+  clibcode = compname_to_clibcode(compname);
+  clibname = clibcode_to_clibname(clibcode);
+
+  /* complib version */
+  if (clibcode == BLOSC_BLOSCLZ_LIB) {
+    clibversion = BLOSCLZ_VERSION_STRING;
+  }
+#if defined(HAVE_LZ4)
+  else if (clibcode == BLOSC_LZ4_LIB) {
+#if defined(LZ4_VERSION_MAJOR)
+    sprintf(sbuffer, "%d.%d.%d",
+            LZ4_VERSION_MAJOR, LZ4_VERSION_MINOR, LZ4_VERSION_RELEASE);
+    clibversion = sbuffer;
+#endif /*  LZ4_VERSION_MAJOR */
+  }
+#endif /*  HAVE_LZ4 */
+#if defined(HAVE_SNAPPY)
+  else if (clibcode == BLOSC_SNAPPY_LIB) {
+#if defined(SNAPPY_VERSION)
+    sprintf(sbuffer, "%d.%d.%d", SNAPPY_MAJOR, SNAPPY_MINOR, SNAPPY_PATCHLEVEL);
+    clibversion = sbuffer;
+#endif /*  SNAPPY_VERSION */
+  }
+#endif /*  HAVE_SNAPPY */
+#if defined(HAVE_ZLIB)
+  else if (clibcode == BLOSC_ZLIB_LIB) {
+    clibversion = ZLIB_VERSION;
+  }
+#endif /*  HAVE_ZLIB */
+
+  *complib = strdup(clibname);
+  *version = strdup(clibversion);
+  return clibcode;
+}
+
+
+/* Return `nbytes`, `cbytes` and `blocksize` from a compressed buffer. */
+void blosc_cbuffer_sizes(const void *cbuffer, size_t *nbytes,
+                         size_t *cbytes, size_t *blocksize)
+{
+  uint8_t *_src = (uint8_t *)(cbuffer);    /* current pos for source buffer */
+  uint8_t version, versionlz;              /* versions for compressed header */
+
+  /* Read the version info (could be useful in the future) */
+  version = _src[0];                       /* blosc format version */
+  versionlz = _src[1];                     /* blosclz format version */
+
+  version += 0;                            /* shut up compiler warning */
+  versionlz += 0;                          /* shut up compiler warning */
+
+  /* Read the interesting values */
+  *nbytes = (size_t)sw32_(_src + 4);       /* uncompressed buffer size */
+  *blocksize = (size_t)sw32_(_src + 8);    /* block size */
+  *cbytes = (size_t)sw32_(_src + 12);      /* compressed buffer size */
+}
+
+
+/* Return `typesize` and `flags` from a compressed buffer. */
+void blosc_cbuffer_metainfo(const void *cbuffer, size_t *typesize,
+                            int *flags)
+{
+  uint8_t *_src = (uint8_t *)(cbuffer);  /* current pos for source buffer */
+  uint8_t version, versionlz;            /* versions for compressed header */
+
+  /* Read the version info (could be useful in the future) */
+  version = _src[0];                     /* blosc format version */
+  versionlz = _src[1];                   /* blosclz format version */
+
+  version += 0;                             /* shut up compiler warning */
+  versionlz += 0;                           /* shut up compiler warning */
+
+  /* Read the interesting values */
+  *flags = (int)_src[2];                 /* flags */
+  *typesize = (size_t)_src[3];           /* typesize */
+}
+
+
+/* Return version information from a compressed buffer. */
+void blosc_cbuffer_versions(const void *cbuffer, int *version,
+                            int *versionlz)
+{
+  uint8_t *_src = (uint8_t *)(cbuffer);  /* current pos for source buffer */
+
+  /* Read the version info */
+  *version = (int)_src[0];         /* blosc format version */
+  *versionlz = (int)_src[1];       /* Lempel-Ziv compressor format version */
+}
+
+
+/* Return the compressor library/format used in a compressed buffer. */
+char *blosc_cbuffer_complib(const void *cbuffer)
+{
+  uint8_t *_src = (uint8_t *)(cbuffer);  /* current pos for source buffer */
+  int clibcode;
+  char *complib;
+
+  /* Read the compressor format/library info */
+  clibcode = (_src[2] & 0xe0) >> 5;
+  complib = clibcode_to_clibname(clibcode);
+  return complib;
+}
+
+
 /*
  * Synchronization variables
  */
@@ -1651,142 +1787,6 @@ int blosc_set_compressor(const char *compname)
   if (!g_initlib) blosc_init();
 
   return code;
-}
-
-
-char* blosc_list_compressors(void)
-{
-  static int compressors_list_done = 0;
-  static char ret[256];
-
-  if (compressors_list_done) return ret;
-  ret[0] = '\0';
-  strcat(ret, BLOSC_BLOSCLZ_COMPNAME);
-#if defined(HAVE_LZ4)
-  strcat(ret, ","); strcat(ret, BLOSC_LZ4_COMPNAME);
-  strcat(ret, ","); strcat(ret, BLOSC_LZ4HC_COMPNAME);
-#endif /*  HAVE_LZ4 */
-#if defined(HAVE_SNAPPY)
-  strcat(ret, ","); strcat(ret, BLOSC_SNAPPY_COMPNAME);
-#endif /*  HAVE_SNAPPY */
-#if defined(HAVE_ZLIB)
-  strcat(ret, ","); strcat(ret, BLOSC_ZLIB_COMPNAME);
-#endif /*  HAVE_ZLIB */
-  compressors_list_done = 1;
-  return ret;
-}
-
-
-int blosc_get_complib_info(char *compname, char **complib, char **version)
-{
-  int clibcode;
-  char *clibname;
-  char *clibversion = "unknown";
-
-  #if (defined(HAVE_LZ4) && defined(LZ4_VERSION_MAJOR)) || (defined(HAVE_SNAPPY) && defined(SNAPPY_VERSION))
-  char sbuffer[256];
-  #endif
-
-  clibcode = compname_to_clibcode(compname);
-  clibname = clibcode_to_clibname(clibcode);
-
-  /* complib version */
-  if (clibcode == BLOSC_BLOSCLZ_LIB) {
-    clibversion = BLOSCLZ_VERSION_STRING;
-  }
-#if defined(HAVE_LZ4)
-  else if (clibcode == BLOSC_LZ4_LIB) {
-#if defined(LZ4_VERSION_MAJOR)
-    sprintf(sbuffer, "%d.%d.%d",
-            LZ4_VERSION_MAJOR, LZ4_VERSION_MINOR, LZ4_VERSION_RELEASE);
-    clibversion = sbuffer;
-#endif /*  LZ4_VERSION_MAJOR */
-  }
-#endif /*  HAVE_LZ4 */
-#if defined(HAVE_SNAPPY)
-  else if (clibcode == BLOSC_SNAPPY_LIB) {
-#if defined(SNAPPY_VERSION)
-    sprintf(sbuffer, "%d.%d.%d", SNAPPY_MAJOR, SNAPPY_MINOR, SNAPPY_PATCHLEVEL);
-    clibversion = sbuffer;
-#endif /*  SNAPPY_VERSION */
-  }
-#endif /*  HAVE_SNAPPY */
-#if defined(HAVE_ZLIB)
-  else if (clibcode == BLOSC_ZLIB_LIB) {
-    clibversion = ZLIB_VERSION;
-  }
-#endif /*  HAVE_ZLIB */
-
-  *complib = strdup(clibname);
-  *version = strdup(clibversion);
-  return clibcode;
-}
-
-
-/* Return `nbytes`, `cbytes` and `blocksize` from a compressed buffer. */
-void blosc_cbuffer_sizes(const void *cbuffer, size_t *nbytes,
-                         size_t *cbytes, size_t *blocksize)
-{
-  uint8_t *_src = (uint8_t *)(cbuffer);    /* current pos for source buffer */
-  uint8_t version, versionlz;              /* versions for compressed header */
-
-  /* Read the version info (could be useful in the future) */
-  version = _src[0];                       /* blosc format version */
-  versionlz = _src[1];                     /* blosclz format version */
-
-  version += 0;                            /* shut up compiler warning */
-  versionlz += 0;                          /* shut up compiler warning */
-
-  /* Read the interesting values */
-  *nbytes = (size_t)sw32_(_src + 4);       /* uncompressed buffer size */
-  *blocksize = (size_t)sw32_(_src + 8);    /* block size */
-  *cbytes = (size_t)sw32_(_src + 12);      /* compressed buffer size */
-}
-
-
-/* Return `typesize` and `flags` from a compressed buffer. */
-void blosc_cbuffer_metainfo(const void *cbuffer, size_t *typesize,
-                            int *flags)
-{
-  uint8_t *_src = (uint8_t *)(cbuffer);  /* current pos for source buffer */
-  uint8_t version, versionlz;            /* versions for compressed header */
-
-  /* Read the version info (could be useful in the future) */
-  version = _src[0];                     /* blosc format version */
-  versionlz = _src[1];                   /* blosclz format version */
-
-  version += 0;                             /* shut up compiler warning */
-  versionlz += 0;                           /* shut up compiler warning */
-
-  /* Read the interesting values */
-  *flags = (int)_src[2];                 /* flags */
-  *typesize = (size_t)_src[3];           /* typesize */
-}
-
-
-/* Return version information from a compressed buffer. */
-void blosc_cbuffer_versions(const void *cbuffer, int *version,
-                            int *versionlz)
-{
-  uint8_t *_src = (uint8_t *)(cbuffer);  /* current pos for source buffer */
-
-  /* Read the version info */
-  *version = (int)_src[0];         /* blosc format version */
-  *versionlz = (int)_src[1];       /* Lempel-Ziv compressor format version */
-}
-
-
-/* Return the compressor library/format used in a compressed buffer. */
-char *blosc_cbuffer_complib(const void *cbuffer)
-{
-  uint8_t *_src = (uint8_t *)(cbuffer);  /* current pos for source buffer */
-  int clibcode;
-  char *complib;
-
-  /* Read the compressor format/library info */
-  clibcode = (_src[2] & 0xe0) >> 5;
-  complib = clibcode_to_clibname(clibcode);
-  return complib;
 }
 
 
