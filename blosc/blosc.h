@@ -10,6 +10,15 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <stdbool.h>
+
+/* stdint.h only available in VS2010 (VC++ 16.0) and newer */
+#if defined(_MSC_VER) && _MSC_VER < 1600
+  #include "win32/stdint-windows.h"
+#else
+  #include <stdint.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -156,9 +165,13 @@ DLL_EXPORT void blosc_destroy(void);
   should never happen.  If you see this, please report it back
   together with the buffer data causing this and compression settings.
   */
-DLL_EXPORT int blosc_compress(int clevel, int doshuffle, size_t typesize,
-                              size_t nbytes, const void *src, void *dest,
-                              size_t destsize);
+DLL_EXPORT int blosc_compress(const uint8_t clevel,
+  const bool doshuffle,
+  const size_t typesize,
+  const size_t nbytes,
+  const void* const src,
+  void* const dest,
+  const size_t destsize);
 
 
 /**
@@ -180,10 +193,16 @@ DLL_EXPORT int blosc_compress(int clevel, int doshuffle, size_t typesize,
   should never happen.  If you see this, please report it back
   together with the buffer data causing this and compression settings.
 */
-DLL_EXPORT int blosc_compress_ctx(int clevel, int doshuffle, size_t typesize,
-                                  size_t nbytes, const void* src, void* dest,
-                                  size_t destsize, const char* compressor,
-                                  size_t blocksize, int numinternalthreads);
+DLL_EXPORT int blosc_compress_ctx(const uint8_t clevel,
+  const bool doshuffle,
+  const size_t typesize,
+  const size_t nbytes,
+  const uint8_t* const src,
+  uint8_t* const dest,
+  const size_t destsize,
+  const char* const compressor,
+  const size_t blocksize,
+  const uint8_t numinternalthreads);
 
 /**
   Decompress a block of compressed data in `src`, put the result in
@@ -198,7 +217,9 @@ DLL_EXPORT int blosc_compress_ctx(int clevel, int doshuffle, size_t typesize,
   output buffer is not large enough, then 0 (zero) or a negative value
   will be returned instead.
 */
-DLL_EXPORT int blosc_decompress(const void *src, void *dest, size_t destsize);
+DLL_EXPORT int blosc_decompress(const uint8_t* const src,
+  uint8_t* const dest,
+  const size_t destsize);
 
 
 /**
@@ -218,8 +239,10 @@ DLL_EXPORT int blosc_decompress(const void *src, void *dest, size_t destsize);
   output buffer is not large enough, then 0 (zero) or a negative value
   will be returned instead.
 */
-DLL_EXPORT int blosc_decompress_ctx(const void *src, void *dest,
-                                    size_t destsize, int numinternalthreads);
+DLL_EXPORT int blosc_decompress_ctx(const void* const src,
+  void* const dest,
+  const size_t destsize,
+	const uint8_t numinternalthreads);
 
 /**
   Get `nitems` (of typesize size) in `src` buffer starting in `start`.
@@ -229,7 +252,8 @@ DLL_EXPORT int blosc_decompress_ctx(const void *src, void *dest,
   Returns the number of bytes copied to `dest` or a negative value if
   some error happens.
   */
-DLL_EXPORT int blosc_getitem(const void *src, int start, int nitems, void *dest);
+DLL_EXPORT int blosc_getitem(const uint8_t* const src, const int start,
+  const int nitems, uint8_t* const dest);
 
 
 /**
@@ -240,7 +264,7 @@ DLL_EXPORT int blosc_getitem(const void *src, int start, int nitems, void *dest)
 
   Returns the previous number of threads.
   */
-DLL_EXPORT int blosc_set_nthreads(int nthreads);
+DLL_EXPORT int blosc_set_nthreads(const int nthreads);
 
 
 /**
@@ -252,7 +276,7 @@ DLL_EXPORT int blosc_set_nthreads(int nthreads);
   for it in this build, it returns a -1.  Else it returns the code for
   the compressor (>=0).
   */
-DLL_EXPORT int blosc_set_compressor(const char* compname);
+DLL_EXPORT int blosc_set_compressor(const char* const compname);
 
 
 /**
@@ -262,7 +286,8 @@ DLL_EXPORT int blosc_set_compressor(const char* compname);
   for it in this build, -1 is returned.  Else, the compressor code is
   returned.
  */
-DLL_EXPORT int blosc_compcode_to_compname(int compcode, char **compname);
+DLL_EXPORT int blosc_compcode_to_compname(const int compcode,
+  const char** const compname);
 
 
 /**
@@ -271,7 +296,7 @@ DLL_EXPORT int blosc_compcode_to_compname(int compcode, char **compname);
   If the compressor name is not recognized, or there is not support
   for it in this build, -1 is returned instead.
  */
-DLL_EXPORT int blosc_compname_to_compcode(const char *compname);
+DLL_EXPORT int blosc_compname_to_compcode(const char* compname);
 
 
 /**
@@ -302,7 +327,8 @@ DLL_EXPORT char* blosc_list_compressors(void);
   If the compressor is supported, it returns the code for the library
   (>=0).  If it is not supported, this function returns -1.
   */
-DLL_EXPORT int blosc_get_complib_info(char *compname, char **complib, char **version);
+DLL_EXPORT int blosc_get_complib_info(const char* const compname,
+  char** const complib, char** const version);
 
 
 /**
@@ -325,8 +351,10 @@ DLL_EXPORT int blosc_free_resources(void);
 
   This function should always succeed.
   */
-DLL_EXPORT void blosc_cbuffer_sizes(const void *cbuffer, size_t *nbytes,
-                         size_t *cbytes, size_t *blocksize);
+DLL_EXPORT void blosc_cbuffer_sizes(const uint8_t* const cbuffer,
+  size_t* const nbytes,
+  size_t* const cbytes,
+  size_t* const blocksize);
 
 
 /**
@@ -343,8 +371,9 @@ DLL_EXPORT void blosc_cbuffer_sizes(const void *cbuffer, size_t *nbytes,
 
   This function should always succeed.
   */
-DLL_EXPORT void blosc_cbuffer_metainfo(const void *cbuffer, size_t *typesize,
-                            int *flags);
+DLL_EXPORT void blosc_cbuffer_metainfo(const uint8_t* const cbuffer,
+  size_t* const typesize,
+  int* const flags);
 
 
 /**
@@ -354,8 +383,9 @@ DLL_EXPORT void blosc_cbuffer_metainfo(const void *cbuffer, size_t *typesize,
 
   This function should always succeed.
   */
-DLL_EXPORT void blosc_cbuffer_versions(const void *cbuffer, int *version,
-                            int *versionlz);
+DLL_EXPORT void blosc_cbuffer_versions(const uint8_t* const cbuffer,
+  int* const version,
+  int* const versionlz);
 
 
 /**
@@ -363,7 +393,7 @@ DLL_EXPORT void blosc_cbuffer_versions(const void *cbuffer, int *version,
 
   This function should always succeed.
   */
-DLL_EXPORT char *blosc_cbuffer_complib(const void *cbuffer);
+DLL_EXPORT char *blosc_cbuffer_complib(const uint8_t* const cbuffer);
 
 
 
@@ -378,7 +408,7 @@ DLL_EXPORT char *blosc_cbuffer_complib(const void *cbuffer);
   Force the use of a specific blocksize.  If 0, an automatic
   blocksize will be used (the default).
   */
-DLL_EXPORT void blosc_set_blocksize(size_t blocksize);
+DLL_EXPORT void blosc_set_blocksize(const size_t blocksize);
 
 #ifdef __cplusplus
 }

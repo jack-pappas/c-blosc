@@ -159,6 +159,8 @@ if(MSVC)
     # versions of certain C functions but this is difficult to do
     # in platform-independent code.
     add_definitions( -D_CRT_SECURE_NO_WARNINGS )
+    
+    add_definitions( /openmp )
 endif(MSVC)
 
 if(WIN32)
