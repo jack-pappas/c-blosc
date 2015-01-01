@@ -1099,7 +1099,7 @@ static size_t serial_blosc(struct blosc_context* const context)
 
   for (block_idx = 0; block_idx < context->nblocks; block_idx++) {
     if (context->compress && !(*(context->header_flags) & BLOSC_MEMCPYED)) {
-      storeu_int32(context->bstarts + block_idx * 4, ntbytes);
+      storeu_int32(context->bstarts + block_idx * sizeof(int32_t), ntbytes);
     }
     
     const bool leftoverblock = (block_idx == context->nblocks - 1) && (context->leftover > 0);
@@ -1134,7 +1134,7 @@ static size_t serial_blosc(struct blosc_context* const context)
       else {
         /* Regular decompression */
         cbytes = blosc_d(context, bsize, leftoverblock,
-                          context->src + loadu_int32(context->bstarts + block_idx * 4),
+                          context->src + loadu_int32(context->bstarts + block_idx * sizeof(int32_t)),
                           context->dest+block_idx*context->blocksize, tmp, tmp2);
       }
     }
@@ -1165,7 +1165,7 @@ static size_t openmp_blosc(struct blosc_context* const context, const uint8_t nu
   int32_t thread_giveup_code = 1; /* zero or negative indicates an error */
   int32_t num_output_bytes = 0; /* number of bytes processed by all threads */
   
-  #pragma omp parallel num_threads(numthreads) shared(thread_giveup_code, num_output_bytes)
+  #pragma omp parallel num_threads(numthreads) shared(block_idx, thread_giveup_code, num_output_bytes)
   {
     /* Number of bytes processed by this thread. */
     int32_t ntbytes = 0;
@@ -1176,7 +1176,7 @@ static size_t openmp_blosc(struct blosc_context* const context, const uint8_t nu
     
     /* Compressing or decompressing? */
     if (context->compress) {
-      #pragma omp parallel for schedule(static) ordered
+      #pragma omp parallel for schedule(static, 1) ordered
       for (block_idx = 0; block_idx < nblocks; block_idx++) {
         /* If an error was encountered by any thread, all threads short-circuit
            to quickly reach the end of the loop. */
@@ -1194,61 +1194,54 @@ static size_t openmp_blosc(struct blosc_context* const context, const uint8_t nu
             context->src + block_idx * context->blocksize,
             bsize);
           cbytes = bsize;
-        }
-        else {
-          /* Regular compression */
-          cbytes = blosc_c(context, bsize, leftoverblock, ntbytes, context->destsize,
-                           context->src + block_idx * context->blocksize, tmp2, tmp);
-          if (cbytes == 0) {
-            thread_giveup_code = 0;              /* uncompressible data */
-            #pragma omp flush (thread_giveup_code)
-            /* 'break' out of the loop by quickly skipping the remaining iterations */
-            continue;
-          }
-        }
-        
-        if (cbytes < 0) {
-          thread_giveup_code = cbytes;         /* error in blosc_c */
-          #pragma omp flush (ntbytes)
-          /* 'break' out of the loop by quickly skipping the remaining iterations */
-          continue;
-        }
-        
-        if (!(*(context->header_flags) & BLOSC_MEMCPYED)) {
-          int32_t ntdest;
-        
-          /* Start critical section */
-          #pragma omp critical
-          {
-            /* Save the current value of num_output_bytes before modifying it. */
-            ntdest = num_output_bytes;
-            
-            storeu_int32(context->bstarts + block_idx * sizeof(int32_t), ntdest); /* update block start counter */
-            if ( (cbytes == 0) || (ntdest+cbytes > context->destsize) ) {
-              thread_giveup_code = 0;  /* uncompressible buffer */
-              #pragma omp flush (thread_giveup_code)
-              /* 'break' out of the loop by quickly skipping the remaining iterations.
-                  Can't use 'continue' here to break out of the critical section, so
-                  the control flow below is carefully structured so if an error occured
-                  the execution will be the same as if 'continue' was used to skip the
-                  rest of the loop body. */
-            }
-            else {
-              #pragma omp atomic
-              num_output_bytes += cbytes;           /* update return bytes counter */
-            }
-          }
-          /* End of critical section */
-
-          /* If no error, copy the compressed buffer to destination */
-          if (thread_giveup_code > 0) {
-            memcpy(context->dest + ntdest, tmp2, cbytes);
-          }
-        }
-        else {
+          
           /* Update counter for this thread */
           ntbytes += cbytes;
         }
+        else {
+          /* Regular compression */
+          cbytes = blosc_c(context, bsize, leftoverblock, 0, ebsize,
+                           context->src + block_idx * context->blocksize, tmp2, tmp);
+          if (cbytes <= 0) {
+            thread_giveup_code = cbytes;    /* uncompressible data or error in blosc_c */
+            #pragma omp flush (thread_giveup_code)
+          }
+          else {
+            int32_t ntdest;
+          
+            /* Begin ordered critical section */
+            #pragma omp ordered
+            {
+              /* TEMP : Debugging/diagnostics */
+              const int thread_number = omp_get_thread_num();
+              const int threads_in_team = omp_get_num_threads();
+              fprintf(stderr, "%d,%d,%d,%d,%d\r\n", thread_number, threads_in_team, block_idx, ntbytes, num_output_bytes);
+            
+              /* Save the current value of num_output_bytes before modifying it. */
+              #pragma omp flush (num_output_bytes)
+              ntdest = num_output_bytes;
+              
+              storeu_int32(context->bstarts + block_idx * sizeof(int32_t), ntdest); /* update block start counter */
+              if ( (cbytes == 0) || (ntdest + cbytes > context->destsize) ) {
+                thread_giveup_code = 0;  /* uncompressible buffer */
+                #pragma omp flush (thread_giveup_code)
+                /* 'break' out of the loop by quickly skipping the remaining iterations.
+                    Can't use 'continue' here to break out of the critical section, so
+                    the control flow below is carefully structured so if an error occured
+                    the execution will be the same as if 'continue' was used to skip the
+                    rest of the loop body. */
+              }
+              else {
+                num_output_bytes += cbytes;           /* update return bytes counter */
+              }
+            } /* End of ordered critical section */
+            
+            /* If no error, copy the compressed buffer to destination. */
+            if (thread_giveup_code > 0) {
+              memcpy(context->dest + ntdest, tmp2, cbytes);
+            }
+          } /* cbytes <= 0 */
+        } /* flags & BLOSC_MEMCPYED */
       } /* for(block_idx) */
     }
     else {
@@ -1280,7 +1273,7 @@ static size_t openmp_blosc(struct blosc_context* const context, const uint8_t nu
           /* Regular decompression */
           cbytes = blosc_d(context, bsize, leftoverblock,
                             context->src + loadu_int32(context->bstarts + block_idx * sizeof(int32_t)),
-                            context->dest+block_idx*context->blocksize, tmp, tmp2);
+                            context->dest + block_idx * context->blocksize, tmp, tmp2);
         }
 
         if (cbytes < 0) {
@@ -1671,6 +1664,8 @@ void blosc_init(void)
   g_global_context->numthreads = 1;
   g_global_context->compcode = BLOSC_BLOSCLZ; /* the compressor to use by default */
   g_initlib = 1;
+  
+  fprintf(stderr, "ThreadNumber,ThreadsInTeam,BlockNumber,ThreadBytes,TotalBytes\r\n");
 }
 
 
