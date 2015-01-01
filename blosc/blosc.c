@@ -1165,7 +1165,7 @@ static size_t openmp_blosc(struct blosc_context* const context, const uint8_t nu
   int32_t thread_giveup_code = 1; /* zero or negative indicates an error */
   int32_t num_output_bytes = 0; /* number of bytes processed by all threads */
   
-  #pragma omp parallel num_threads(numthreads) shared(block_idx, thread_giveup_code, num_output_bytes)
+  #pragma omp parallel num_threads(numthreads) shared(thread_giveup_code, num_output_bytes) private(block_idx)
   {
     /* Number of bytes processed by this thread. */
     int32_t ntbytes = 0;
