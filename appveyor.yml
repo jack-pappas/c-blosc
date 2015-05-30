@@ -1,5 +1,9 @@
 # AppVeyor CI build configuration for c-blosc
 
+# If any of the jobs in a build fail, immediately fail the whole build.
+matrix:
+  fast_finish: true
+
 # Before cloning the repo, configure git to handle line endings correctly.
 init:
   - git config --global core.autocrlf input
@@ -8,11 +12,23 @@ init:
 # It's incrementally automatically like travis-ci but allows custom formatting.
 version: '{build}'
 
+# The build matrix (defines the jobs run for each build).
+environment:
+  matrix:
+  # VS2013 x64 Release
+  - cmake_generator: Visual Studio 12 Win64
+    build_config: Release
+
+  # MinGW RelWithDebInfo (x86 or x64 depends on MinGW installation)
+  - cmake_generator: MinGW Makefiles
+    config_config: RelWithDebInfo
+    build_config: $(config_config)
+
 build_script:
   - cmd: mkdir build
   - cmd: cd build
-  - cmd: cmake -G "Visual Studio 12 Win64" ..
-  - cmd: cmake --build . --config Release
+  - cmd: cmake -G "%cmake_generator%" -DCMAKE_BUILD_TYPE=%config_config% ..
+  - cmd: cmake --build . --config %build_config%
   # Disable CPack for now as it conflicts with the Chocolatey 'cpack' alias
   # for 'choco pack' and causes the build to fail.
   #- cmd: cpack
