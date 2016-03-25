@@ -46,10 +46,10 @@ static const bool true = 1;
 
 
 /*  Define function pointer types for shuffle/unshuffle routines. */
-typedef void(*shuffle_func)(const size_t, const size_t, const uint8_t*, const uint8_t*);
-typedef void(*unshuffle_func)(const size_t, const size_t, const uint8_t*, const uint8_t*);
-typedef int64_t(*bitshuffle_func)(void*, void*, const size_t, const size_t, void*);
-typedef int64_t(*bitunshuffle_func)(void*, void*, const size_t, const size_t, void*);
+typedef void(*shuffle_func)(const size_t, const size_t, const uint8_t* const, uint8_t* const);
+typedef void(*unshuffle_func)(const size_t, const size_t, const uint8_t* const, uint8_t* const);
+typedef int64_t(*bitshuffle_func)(const uint8_t* const, uint8_t* const, const size_t, const size_t, uint8_t* const);
+typedef int64_t(*bitunshuffle_func)(const uint8_t* const, uint8_t* const, const size_t, const size_t, uint8_t* const);
 
 /* An implementation of shuffle/unshuffle routines. */
 typedef struct shuffle_implementation {
@@ -366,8 +366,9 @@ void init_shuffle_implementation() {
 /*  Shuffle a block by dynamically dispatching to the appropriate
     hardware-accelerated routine at run-time. */
 void
-shuffle(const size_t bytesoftype, const size_t blocksize,
-        const uint8_t* _src, const uint8_t* _dest) {
+blosc_shuffle_bytes(
+    const size_t bytesoftype, const size_t blocksize,
+    const uint8_t* const _src, uint8_t* const _dest) {
   /* Initialize the shuffle implementation if necessary. */
   init_shuffle_implementation();
 
@@ -379,8 +380,9 @@ shuffle(const size_t bytesoftype, const size_t blocksize,
 /*  Unshuffle a block by dynamically dispatching to the appropriate
     hardware-accelerated routine at run-time. */
 void
-unshuffle(const size_t bytesoftype, const size_t blocksize,
-          const uint8_t* _src, const uint8_t* _dest) {
+blosc_unshuffle_bytes(
+    const size_t bytesoftype, const size_t blocksize,
+    const uint8_t* const _src, uint8_t* const _dest) {
   /* Initialize the shuffle implementation if necessary. */
   init_shuffle_implementation();
 
@@ -392,9 +394,10 @@ unshuffle(const size_t bytesoftype, const size_t blocksize,
 /*  Bit-shuffle a block by dynamically dispatching to the appropriate
     hardware-accelerated routine at run-time. */
 int
-bitshuffle(const size_t bytesoftype, const size_t blocksize,
-           const uint8_t* const _src, const uint8_t* _dest,
-           const uint8_t* _tmp) {
+blosc_shuffle_bits(
+    const size_t bytesoftype, const size_t blocksize,
+    const uint8_t* const _src, uint8_t* const _dest,
+    uint8_t* const _tmp) {
   int size = blocksize / bytesoftype;
   /* Initialize the shuffle implementation if necessary. */
   init_shuffle_implementation();
@@ -413,9 +416,10 @@ bitshuffle(const size_t bytesoftype, const size_t blocksize,
 /*  Bit-unshuffle a block by dynamically dispatching to the appropriate
     hardware-accelerated routine at run-time. */
 int
-bitunshuffle(const size_t bytesoftype, const size_t blocksize,
-             const uint8_t* const _src, const uint8_t* _dest,
-             const uint8_t* _tmp) {
+blosc_unshuffle_bits(
+    const size_t bytesoftype, const size_t blocksize,
+    const uint8_t* const _src, const uint8_t* _dest,
+    const uint8_t* _tmp) {
   int size = blocksize / bytesoftype;
   /* Initialize the shuffle implementation if necessary. */
   init_shuffle_implementation();

@@ -531,12 +531,12 @@ static int blosc_c(const struct blosc_context* context, int32_t blocksize,
 
   if (*(context->header_flags) & BLOSC_DOSHUFFLE) {
     /* Byte shuffling only makes sense if typesize > 1 */
-    shuffle(typesize, blocksize, src, tmp);
+    blosc_shuffle_bytes(typesize, blocksize, src, tmp);
     _tmp = tmp;
   }
   /* We don't allow more than 1 filter at the same time (yet) */
   else if (*(context->header_flags) & BLOSC_DOBITSHUFFLE) {
-    bscount = bitshuffle(typesize, blocksize, src, tmp, tmp2);
+    bscount = blosc_shuffle_bits(typesize, blocksize, src, tmp, tmp2);
     if (bscount < 0)
       return bscount;
     _tmp = tmp;
@@ -718,10 +718,10 @@ static int blosc_d(struct blosc_context* context, int32_t blocksize, int32_t lef
   } /* Closes j < nsplits */
 
   if (*(context->header_flags) & BLOSC_DOSHUFFLE) {
-    unshuffle(typesize, blocksize, tmp, dest);
+    blosc_unshuffle_bytes(typesize, blocksize, tmp, dest);
   }
   else if (*(context->header_flags) & BLOSC_DOBITSHUFFLE) {
-    bscount = bitunshuffle(typesize, blocksize, tmp, dest, tmp2);
+    bscount = blosc_unshuffle_bits(typesize, blocksize, tmp, dest, tmp2);
     if (bscount < 0)
       return bscount;
   }

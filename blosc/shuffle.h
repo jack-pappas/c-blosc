@@ -31,14 +31,20 @@ extern "C" {
   calling the hardware-accelerated routines because this method is both cross-
   platform and future-proof.
 */
-BLOSC_NO_EXPORT void
-shuffle(const size_t bytesoftype, const size_t blocksize,
-        const uint8_t* _src, const uint8_t* _dest);
+BLOSC_EXPORT void
+blosc_shuffle_bytes(
+    const size_t bytesoftype,
+    const size_t blocksize,
+    const uint8_t* const _src,
+    uint8_t* const _dest);
 
-BLOSC_NO_EXPORT int
-bitshuffle(const size_t bytesoftype, const size_t blocksize,
-           const uint8_t* const _src, const uint8_t* _dest,
-           const uint8_t* _tmp);
+BLOSC_EXPORT int
+blosc_shuffle_bits(
+    const size_t bytesoftype,
+    const size_t blocksize,
+    const uint8_t* const _src,
+    uint8_t* const _dest,
+    uint8_t* const _tmp);
 
 /**
   Primary unshuffle and bitunshuffle routine.
@@ -50,15 +56,21 @@ bitshuffle(const size_t bytesoftype, const size_t blocksize,
   calling the hardware-accelerated routines because this method is both cross-
   platform and future-proof.
 */
-BLOSC_NO_EXPORT void
-unshuffle(const size_t bytesoftype, const size_t blocksize,
-          const uint8_t* _src, const uint8_t* _dest);
+BLOSC_EXPORT void
+blosc_unshuffle_bytes(
+    const size_t bytesoftype,
+    const size_t blocksize,
+    const uint8_t* const _src,
+    uint8_t* const _dest);
 
 
-BLOSC_NO_EXPORT int
-bitunshuffle(const size_t bytesoftype, const size_t blocksize,
-             const uint8_t* const _src, const uint8_t* _dest,
-             const uint8_t* _tmp);
+BLOSC_EXPORT int
+blosc_unshuffle_bits(
+    const size_t bytesoftype,
+    const size_t blocksize,
+    const uint8_t* const _src,
+    uint8_t* const _dest,
+    uint8_t* const _tmp);
 
 #ifdef __cplusplus
 }
